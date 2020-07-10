@@ -176,7 +176,6 @@ He110 World
 
 === Q To lead to the same output in big-endian architecture, what
 ===   should be the value of i?
-57616
 The value of i should stay the same.
 because it is fetched as unsigned int, it doesn׳t need to be changed.
 

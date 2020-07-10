@@ -10,6 +10,7 @@
 #include <kern/console.h>
 #include <kern/monitor.h>
 #include <kern/kdebug.h>
+#include <kern/pmap.h>
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
@@ -25,6 +26,10 @@ static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
 	{ "backtrace", "Display stack backtrace", mon_backtrace },
+    { "showmappings", "Display physical page mappings and corresponding permission bits that apply to a given range", mon_showmappings },
+    { "chpgperm", "Explicitly set, clear, or change the permissions of any mapping in the current address space", mon_chpgperm },
+    { "memdump" , "Dump the contents of a range of memory given either a virtual or physical address range", mon_memdump },
+    
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -76,7 +81,244 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
     return 0;
 }
 
+int
+mon_showmappings(int argc, char **argv, struct Trapframe *tf)
+{
+    if (argc != 3) {
+        cprintf("Parameters are: showmappings bound1 bound2\n");
+        return 0;
+    }
+    
+    uintptr_t bound1 = ROUNDDOWN(strtol(argv[1], NULL, 16), PGSIZE);
+    uintptr_t bound2 = ROUNDDOWN(strtol(argv[2], NULL, 16), PGSIZE);
+    if (bound1 > bound2) {
+        cprintf("bound1 must be less than bound2\n");
+        return 0;
+    }
+    
+    pte_t *page_table_entry;
+    extern pde_t *kern_pgdir;
+    
+    char flags[] = "GSDACTUWP"; 
+    int NUM_FLAGS = 9;
+    cprintf("VA      PA      Flags\n");
+    uintptr_t ptr;
+    
+    for (ptr = bound1; ptr <= bound2; ptr += PGSIZE) {
+        cprintf("0x%08x      ", ptr);
+        page_table_entry = pgdir_walk(kern_pgdir, (void *)ptr, 0);
+        
+        if (!page_table_entry) {
+            cprintf(" not mapped");
+        } else {
+            cprintf("0x%08x      ", PTE_ADDR(*page_table_entry));
+            int flag = (*page_table_entry & 0xFFF);
+            int i;
+            for (i = 0; i < NUM_FLAGS; i++) {
+                if ((flag >> (NUM_FLAGS - 1 - i)) & 1) {
+                    cprintf("%c", flags[i]);
+                } else {
+                    cprintf("-");
+                }
+            }
+        }
+        
+        cprintf("\n");
+        if (ptr >= 0xfffff000)
+            break;
+    }
+    return 0;
+}
 
+
+
+int
+mon_chpgperm(int argc, char **argv, struct Trapframe *tf)
+{
+    int action = 0;
+    #define GIVEN_SET    1
+    #define GIVEN_CLEAR  2
+    #define GIVEN_CHANGE 3
+    
+    if (argc < 3) {
+        cprintf("Parameters are: chpgperm action va [state]\n");
+        return 0;
+    }
+    if (!(strcmp(argv[1], "set")))
+        action = GIVEN_SET;
+    else if (!(strcmp(argv[1], "clear")))
+        action = GIVEN_CLEAR;
+    else if (!(strcmp(argv[1], "change")))
+        action = GIVEN_CHANGE;
+    else {
+        cprintf("chpgperm: Not a valid action\n");
+        return 0;
+    }
+  
+    extern pde_t *kern_pgdir;
+    uintptr_t virtual_address = ROUNDDOWN(strtol(argv[2], NULL, 16), PGSIZE);
+    pte_t *page_table_entry = pgdir_walk(kern_pgdir, (void *)virtual_address, 0);
+    if (!page_table_entry) {
+        cprintf("chpgperm: Cannot change permission for page [0x%08x,0x%08x]\n", virtual_address, (virtual_address+PGSIZE));
+        return 0;
+    }
+    if (!(*page_table_entry & PTE_P)) {
+        cprintf("chpgperm: Cannot change permission for page [0x%08x,0x%08x]\n",  virtual_address, (virtual_address+PGSIZE));
+        return 0;
+    }
+    
+    
+    // clean action
+    
+    if (action == GIVEN_CLEAR) {
+        if (argc != 3) {
+            cprintf("Parameters are: chpgperm clear va\n");
+            return 0;
+        }
+        
+        *page_table_entry = *page_table_entry & ~(PTE_U | PTE_W);
+        cprintf("[0x%08x,0x%08x]: Supervisor | Read-only\n", virtual_address, (virtual_address+PGSIZE));
+    }
+    
+    // set action
+    
+    if ((action == GIVEN_SET) && (argc != 4)) {
+        cprintf("Usage: chpgperm set va state\n");
+        cprintf("Each state is of the form '([[Ss]|[Uu]])([[Rr]|[Ww]])'.\n");
+        return 0;
+    }
+ 
+    if (( action == GIVEN_SET ) && (strlen(argv[3]) != 2)) {
+        cprintf("chpgperm set: Each state is of the form '([[Ss]|[Uu]])([[Rr]|[Ww]])'.\n");
+        return 0;
+    }
+    if (action == GIVEN_SET) {
+        int perm = 0;
+        if ((argv[3][0] == 'U') | (argv[3][0] == 'u')) {
+            perm |= PTE_U;
+        }
+        else if ((argv[3][0] != 'S') & (argv[3][0] != 's')) {
+            cprintf("chpgperm set: '%c' is not a valid flag for the U/S bit\n", argv[3][0]);
+            return 0;
+        }
+        if ((argv[3][1] == 'W') | (argv[3][1] == 'w')) {
+            perm |= PTE_W;
+        }
+        else if ((argv[3][1] != 'R') & (argv[3][1] != 'r')) {
+            cprintf("chpgperm set: '%c' is not a valid flag for the R/W bit\n", argv[3][1]);
+            return 0;            
+        }
+        
+        *page_table_entry = (*page_table_entry & ~(PTE_U | PTE_W)) | perm;
+        cprintf("[0x%08x,0x%08x]: ", virtual_address, (virtual_address+PGSIZE));
+        cprintf((*page_table_entry & PTE_U) ? "User" : "Supervisor");
+        cprintf(" | ");
+        cprintf((*page_table_entry & PTE_W) ? "Read/write" : "Read-only");
+        cprintf("\n");
+    }
+    
+    // change action
+    
+    if (action == GIVEN_CHANGE) {
+        if (argc != 4) {
+            cprintf("Parameters are: chpgperm change va state\n");
+            cprintf("Each state is of the form '[+-]([Uu]|[Ww])'.\n");
+            return 0;
+        }
+
+        if (strlen(argv[3]) != 2) {
+            cprintf("chpgperm change: Each state is of the form '[+-]([Uu]|[Ww])'.\n");
+            return 0;
+        }
+        
+        int permit = 0, perm = 0;
+        if (argv[3][0] == '+') {
+            permit = 1;
+        } else if (argv[3][0] == '-') {
+            permit = 0;
+        } else {
+            cprintf("chpgperm change: Each state is of the form '[+-]([Uu]|[Ww])'.\n");
+            return 0;
+        }
+        if ((argv[3][1] == 'U') | (argv[3][1] == 'u')) {
+            perm = PTE_U;
+        } else if ((argv[3][1] == 'W') | (argv[3][1] == 'w')) {
+            perm = PTE_W;
+        } else {
+            cprintf("chpgperm change: '%c' is not a valid flag either for the U/S bit or the R/W bit\n", argv[3][1]);
+            return 0;
+        }
+        if (permit) {
+            *page_table_entry |= perm;
+        } else {
+            *page_table_entry &= (~perm);
+        }
+        cprintf("[0x%08x,0x%08x]: ", virtual_address, (virtual_address+PGSIZE));
+        cprintf((*page_table_entry & PTE_U) ? "User" : "Supervisor");
+        cprintf(" | ");
+        cprintf((*page_table_entry & PTE_W) ? "Read/write" : "Read-only");
+        cprintf("\n");
+    }
+    return 0;
+}
+
+
+int
+mon_memdump(int argc, char **argv, struct Trapframe *tf)
+{
+    if ((argc < 3) | (argc > 4)) {
+        cprintf("Parameters are: memdump op bound1 [bound2]\n");
+        return 0;
+    }
+    uintptr_t bound1 = ROUNDDOWN(strtol(argv[2], NULL, 16), 0x10);
+    uintptr_t bound2 = (argc == 3) ? bound1 : ROUNDDOWN(strtol(argv[3], NULL, 16), 0x10);
+    extern pde_t *kern_pgdir;
+    if (bound1 > bound2) {
+        cprintf("memdump: bound2 cannot be lower than bound1\n");
+        return 0;
+    }
+    int virtual = 0;
+    if ((!(strcmp(argv[1], "-V"))) | (!(strcmp(argv[1], "-v")))) {
+        virtual = 1;
+    } else if ((!(strcmp(argv[1], "-P"))) | (!(strcmp(argv[1], "-p")))) {
+        virtual = 0;
+    } else {
+        cprintf("memdump: op is of the form '(-[Vv])|(-[Pp])'.\n");
+        return 0;
+    }
+    if (virtual) {
+        cprintf("Virtual       Physical\n");
+        uintptr_t v;
+        for (v = bound1; v <= bound2; v += 0x10) {
+            cprintf("[0x%08x]  ", v);
+            struct PageInfo *page_information = page_lookup(kern_pgdir, (void *)v, NULL);
+            if (page_information) {
+                cprintf("[0x%08x]    ", page2pa(page_information) + PGOFF(v));
+                int j;
+                for (j = 0; j < 0x10; j += 4) {
+                    cprintf("%08lx ", *(long *)(v + j));
+                }
+                cprintf("\n");
+                continue;
+            } else {
+                cprintf(" not mapped\n");
+                continue;
+            }
+        }   
+    } else {     
+        cprintf("Physical\n");
+        uintptr_t ptr;
+        for (ptr = bound1; ptr <= bound2; ptr += 0x10) {
+            cprintf("[0x%08x]    ", ptr);
+            int j;
+            for (j = 0; j < 0x10; j += 4) {
+                cprintf("%08lx ", *(long *)KADDR(ptr + j));
+            }
+        }
+        cprintf("\n");
+    }
+    return 0;
+}
 
 /***** Kernel monitor command interpreter *****/
 
@@ -138,3 +380,4 @@ monitor(struct Trapframe *tf)
 				break;
 	}
 }
+

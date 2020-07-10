@@ -363,10 +363,6 @@ class GDBClient(object):
     def breakpoint(self, addr):
         self.__send("Z1,%x,1" % addr)
 
-    def kill(self):
-        self.__send_break()
-        self.__send("k")
-
 
 ##################################################################
 # QEMU test runner

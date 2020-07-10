@@ -1,0 +1,50 @@
+Questionary
+
+Q1: How did you structure your transmit implementation? In particular, what do
+   you do if the transmit ring is full?
+A1: Using TDH and TDT registers as head and tail index of the transmit ring
+  buffer, first initialized to 0. When trying to send the packet, the driver
+  will take the DD bit of the descriptor and will check if there is an available
+  slot for a new descriptor. If the DD bit is set, a new tx_desc will be
+  instantiated. Else, the ring is full, hence the driver will return a return
+  code informing the relevant environment. The environment in it's turn, will
+  yield the CPU and will try another time.
+
+Q2: How did you structure your receive implementation? In particular, what do you
+   do if the receive queue is empty and a user environment requests the next
+   incoming packet?
+
+A2: RDH and RDT registers are the head and tail of the ring buffer, while RDH is
+   set to zero at start and RDT is set to the ring size - 1 at start. When
+   equals, the ring is full of descriptors. all the descriptors are bounded
+   between the head and the tail, while the rx_desc are of free one, which can
+   be used by the network driver. We use polling to receive packets, the driver
+   checks the DD and EOP bits of the next rx_desc of the tail. If both of the
+   bits are set, the data will be copied and the descriptor will be free. Else,
+   the receive queue is full of available descriptors, and an error code will
+   return to the relevant environment (in that case it is the input
+   environment). The environment will yield the CPU and will try again later.
+
+Q3: What does the web page served by JOS's web server say?
+A3: "This file came from JOS" "Cheesy web page!"
+
+Q4: How long approximately did it take you to do this lab?
+A4: Around 25 hours.
+
+Challenges
+
+C1:
+We did the first challenge: read MAC address from EEPROM.
+The data that can be accessed from the software is shown in the E1000 developer manual.
+Ethernet address data(MAC address) locate from 0x00 to 0x02 we implemented some methods
+which are located in e1000.c to read data from a given address from EEPROM.
+The MAC addresses are located in a global array and are made accessible by the
+system call we created.
+
+C3:
+We can get our physical address of the user buffer through output page table,
+since it already mapped into the output environment with IPC.
+We pass it's physical address to network device directly, instead of copy user
+buffer to transmit ring buffer.
+In output.c, we use a new system call named sys_e1000_transmit_direct() that
+implements the new way of sending packets.

@@ -13,6 +13,8 @@
 #include <kern/picirq.h>
 #include <kern/cpu.h>
 #include <kern/spinlock.h>
+#include <kern/time.h>
+#include <kern/e1000.h>
 
 static struct Taskstate ts;
 
@@ -72,7 +74,7 @@ trap_init(void)
 	extern struct Segdesc gdt[];
 
 	// LAB 3: Your code here.
-    
+
     void handler_divide();
     void handler_debug();
     void handler_nmi();
@@ -98,6 +100,8 @@ trap_init(void)
     void th_irq_spurious();
     void th_irq_ide();
     void th_irq_error();
+		/* CHANGE */
+		void th_irq_network();
 
     SETGATE(idt[T_DIVIDE], 0, GD_KT, &handler_divide, 0);
     SETGATE(idt[T_DEBUG], 0, GD_KT, &handler_debug, 0);
@@ -118,14 +122,17 @@ trap_init(void)
     SETGATE(idt[T_MCHK], 0, GD_KT, &handler_mchk, 0);
     SETGATE(idt[T_SIMDERR], 0, GD_KT, &handler_simderr, 0);
     SETGATE(idt[T_SYSCALL], 0, GD_KT, &handler_syscall, 3);
-    
+
     SETGATE(idt[IRQ_OFFSET + IRQ_TIMER], 0, GD_KT, &th_irq_timer, 0);
     SETGATE(idt[IRQ_OFFSET + IRQ_KBD], 0, GD_KT, &th_irq_kbd, 0);
     SETGATE(idt[IRQ_OFFSET + IRQ_SERIAL], 0, GD_KT, &th_irq_serial, 0);
     SETGATE(idt[IRQ_OFFSET + IRQ_SPURIOUS], 0, GD_KT, &th_irq_spurious, 0);
     SETGATE(idt[IRQ_OFFSET + IRQ_IDE], 0, GD_KT, &th_irq_ide, 0);
+		/* CHANGE */
+		SETGATE(idt[IRQ_OFFSET + IRQ_NETWORK], 0, GD_KT, &th_irq_network, 0);
+
     SETGATE(idt[IRQ_OFFSET + IRQ_ERROR], 0, GD_KT, &th_irq_error, 0);
-    
+
     /*
     extern uint32_t handlers[];
     int i;
@@ -138,7 +145,7 @@ trap_init(void)
         }
     }
     */
-    
+
     /*
     extern uint32_t vectors[];
     int i;
@@ -154,8 +161,8 @@ trap_init(void)
 		}
 	}
     */
-    
-	// Per-CPU setup 
+
+	// Per-CPU setup
 	trap_init_percpu();
 }
 
@@ -199,7 +206,7 @@ trap_init_percpu(void)
 					sizeof(struct Taskstate) - 1, 0);
 	gdt[GD_TSS0 >> 3].sd_s = 0;
     */
-    
+
     gdt[(GD_TSS0 >> 3) + thiscpu->cpu_id] = SEG16(STS_T32A, (uint32_t) (&thiscpu->cpu_ts), sizeof(struct Taskstate) - 1, 0);
     gdt[(GD_TSS0 >> 3) + thiscpu->cpu_id].sd_s = 0;
 
@@ -262,8 +269,9 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
-    
-    int32_t res;
+
+  int32_t res;
+	int send, rec;
 	switch (tf->tf_trapno) {
         case T_PGFLT:
 			page_fault_handler(tf);
@@ -272,13 +280,15 @@ trap_dispatch(struct Trapframe *tf)
 			monitor(tf);
 			break;
         case T_SYSCALL:
-            tf->tf_regs.reg_eax = syscall(tf->tf_regs.reg_eax, 
+            tf->tf_regs.reg_eax = syscall(tf->tf_regs.reg_eax,
                 tf->tf_regs.reg_edx, tf->tf_regs.reg_ecx,
                 tf->tf_regs.reg_ebx, tf->tf_regs.reg_edi,
                 tf->tf_regs.reg_esi);
                 return;
         case IRQ_OFFSET + IRQ_TIMER:
             lapic_eoi();
+						if (cpunum() == 0)
+							time_tick();
             sched_yield();
             return;
         case IRQ_OFFSET+IRQ_KBD:
@@ -289,9 +299,26 @@ trap_dispatch(struct Trapframe *tf)
             lapic_eoi();
             serial_intr();
             return;
+				/* CHANGE */
+				case IRQ_OFFSET + IRQ_NETWORK:
+					send = e1000_interrupt_get_sent();
+					rec = e1000_interrupt_get_rec();
+					if(send){
+						cprintf("~~~~~need to wake up sender!\n");
+						e1000_send_morning();
+						e1000_receive_morning();
+					}
+					if(rec){
+						cprintf("~~~~~need to wake up receiver!\n");
+						e1000_receive_morning();
+						e1000_send_morning();
+					}
+					irq_eoi();
+					lapic_eoi();
+					return;
 		default:
             break;
-	}   
+	}
 
     // Unexpected trap: The user process or the kernel has a bug.
     print_trapframe(tf);
@@ -314,7 +341,7 @@ trap_dispatch(struct Trapframe *tf)
 	// Handle clock interrupts. Don't forget to acknowledge the
 	// interrupt using lapic_eoi() before calling the scheduler!
 	// LAB 4: Your code here.
-   
+
 
 	// Handle keyboard and serial interrupts.
 	// LAB 5: Your code here.
@@ -401,7 +428,7 @@ page_fault_handler(struct Trapframe *tf)
 	// Handle kernel-mode page faults.
 
 	// LAB 3: Your code here.
-    
+
     if ((tf->tf_cs & 0x3) == 0) {
         panic("in page_fault_handler: page fault while in kernel mode");
     }
@@ -438,7 +465,7 @@ page_fault_handler(struct Trapframe *tf)
 	//   (the 'tf' variable points at 'curenv->env_tf').
 
 	// LAB 4: Your code here.
-    
+
     if (curenv->env_pgfault_upcall) {
         struct UTrapframe *utf;
         if (tf->tf_esp < UXSTACKTOP && tf->tf_esp >= UXSTACKTOP - PGSIZE) {
@@ -465,4 +492,3 @@ page_fault_handler(struct Trapframe *tf)
 	print_trapframe(tf);
 	env_destroy(curenv);
 }
-

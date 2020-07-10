@@ -48,6 +48,7 @@ enum {
 enum EnvType {
 	ENV_TYPE_USER = 0,
 	ENV_TYPE_FS,		// File system server
+	ENV_TYPE_NS,		// Network server
 };
 
 
@@ -74,9 +75,13 @@ struct Env {
 	uint32_t env_ipc_value;		// Data value sent to us
 	envid_t env_ipc_from;		// envid of the sender
 	int env_ipc_perm;		// Perm of page mapping received
-    
+
     // CHALLENGE
     int env_priority;
+
+		/* CHANGE */
+		bool send_zZ;
+		bool rec_zZ;
 };
 
 #endif // !JOS_INC_ENV_H

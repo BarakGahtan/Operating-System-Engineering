@@ -26,7 +26,7 @@ static struct Env *env_free_list;	// Free environment list
 // Set up global descriptor table (GDT) with separate segments for
 // kernel mode and user mode.  Segments serve many purposes on the x86.
 // We don't use any of their memory-mapping capabilities, but we need
-// them to switch privilege levels. 
+// them to switch privilege levels.
 //
 // The kernel and user segments are identical except for the DPL.
 // To load the SS register, the CPL must equal the DPL.  Thus,
@@ -119,7 +119,7 @@ env_init(void)
 {
 	// Set up envs array
 	// LAB 3: Your code here.
-    
+
     int i;
     env_free_list = NULL;
     for (i = NENV -1; i >= 0; --i) {
@@ -128,7 +128,7 @@ env_init(void)
 		envs[i].env_status = ENV_FREE;
 		env_free_list =  &envs[i];
 	}
-    
+
 	// Per-CPU part of the initialization
 	env_init_percpu();
 }
@@ -193,11 +193,11 @@ env_setup_vm(struct Env *e)
 
 	// LAB 3: Your code here.
 
-    
+
     p->pp_ref++;
     e->env_pgdir = page2kva(p);
     memcpy(e->env_pgdir, kern_pgdir, PGSIZE);
-    
+
 	// UVPT maps the env's own page table read-only.
 	// Permissions: kernel R, user R
 	e->env_pgdir[PDX(UVPT)] = PADDR(e->env_pgdir) | PTE_P | PTE_U;
@@ -258,7 +258,7 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 	e->env_tf.tf_ss = GD_UD | 3;
 	e->env_tf.tf_esp = USTACKTOP;
 	e->env_tf.tf_cs = GD_UT | 3;
-    
+
 	// You will set e->env_tf.tf_eip later.
 
 	// Enable interrupts while in user mode.
@@ -274,6 +274,10 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 	// commit the allocation
 	env_free_list = e->env_link;
 	*newenv_store = e;
+
+	/* CHANGE */
+	e->send_zZ = false;
+	e->rec_zZ = false;
 
 	// cprintf("[%08x] new env %08x\n", curenv ? curenv->env_id : 0, e->env_id);
 	return 0;
@@ -296,10 +300,10 @@ region_alloc(struct Env *e, void *va, size_t len)
 	//   'va' and 'len' values that are not page-aligned.
 	//   You should round va down, and round (va + len) up.
 	//   (Watch out for corner-cases!)
-    
+
     void* start_va = (void*)ROUNDDOWN((uint32_t)va, PGSIZE);
 	void* end_va =  (void*)ROUNDUP((uint32_t)va+len, PGSIZE);
-    
+
 	void* i;
 	int res;
 	for (i = start_va; i < end_va; i += PGSIZE) {
@@ -364,14 +368,14 @@ load_icode(struct Env *e, uint8_t *binary)
 	//  What?  (See env_run() and env_pop_tf() below.)
 
 	// LAB 3: Your code here.
-    
+
     if(!e || !binary) panic("FAILED in load_icode: invalid environment or binary\n");
-    
+
     struct Elf* elf_header = (struct Elf *) binary;
     if(elf_header->e_magic != ELF_MAGIC) panic("FAILED in load_icode: invalid elf format\n");
-	
+
 	lcr3(PADDR(e->env_pgdir));
-    
+
     struct Proghdr* prog_header = (struct Proghdr *) ((uint8_t *) binary + elf_header->e_phoff);
 	struct Proghdr* elf_prog_header = prog_header + elf_header->e_phnum;
 
@@ -381,22 +385,22 @@ load_icode(struct Env *e, uint8_t *binary)
 			if(prog_header->p_memsz < prog_header->p_filesz)
 				panic("FAILED in load_icode: p_memsz < p_filesz\n");
 			region_alloc(e, (void*)prog_header->p_va, prog_header->p_memsz);
-            
+
 			memmove((void*)prog_header->p_va, (uint8_t *)binary + prog_header->p_offset, prog_header->p_filesz);
 			memset((void*)prog_header->p_va + prog_header->p_filesz, 0, prog_header->p_memsz - prog_header->p_filesz);
 		}
 	}
-    
+
 
 
 	// Now map one page for the program's initial stack
 	// at virtual address USTACKTOP - PGSIZE.
 
 	// LAB 3: Your code here.
-    
+
     e->env_tf.tf_eip = elf_header->e_entry;
     region_alloc(e, (void*)(USTACKTOP-PGSIZE), PGSIZE);
-    
+
     lcr3(PADDR(kern_pgdir));
 }
 
@@ -423,7 +427,11 @@ env_create(uint8_t *binary, enum EnvType type)
 
 	// If this is the file server (type == ENV_TYPE_FS) give it I/O privileges.
 	// LAB 5: Your code here.
-    
+
+	/* CHANGE */
+	environment->send_zZ = false;
+	environment->rec_zZ = false;
+
     if (type == ENV_TYPE_FS) {
         environment->env_tf.tf_eflags |= FL_IOPL_MASK;
     }
@@ -526,7 +534,7 @@ env_pop_tf(struct Trapframe *tf)
 		"\taddl $0x8,%%esp\n" /* skip tf_trapno and tf_errcode */
 		"\tiret"
 		: : "g" (tf) : "memory");
-        
+
 	panic("iret failed");  /* mostly to placate the compiler */
 }
 
@@ -558,21 +566,20 @@ env_run(struct Env *e)
 	//	e->env_tf to sensible values.
 
 	// LAB 3: Your code here.
-    
+
     if (!e) panic("FAILED in env_run: e not initialized\n");
-    
+
 	if(curenv != NULL && curenv->env_status == ENV_RUNNING) {
         curenv->env_status = ENV_RUNNABLE;
 	}
-    
+
     curenv = e;
 	curenv->env_runs++;
 	curenv->env_status = ENV_RUNNING;
 
     unlock_kernel();
-    
+
 	lcr3(PADDR(curenv->env_pgdir));
-    
+
 	env_pop_tf(&e->env_tf);
 }
-

@@ -26,6 +26,13 @@ enum {
 	E_NOT_EXEC	,	// File not a valid executable
 	E_NOT_SUPP	,	// Operation not supported
 
+	// Network driver error codes -- only seen in user-level
+	E_PACKET_TOO_BIG ,	// Packet size is too big for an Ethernet frame
+	E_TX_QUEUE_FULL  ,	// Transmit queue is full
+	E_RX_QUEUE_EMPTY ,	// Receive queue is empty
+	E_BUF_TOO_SMALL  ,      // Buffer too small for receiving
+
+
 	MAXERROR
 };
 

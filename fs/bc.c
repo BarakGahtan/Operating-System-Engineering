@@ -48,13 +48,13 @@ bc_pgfault(struct UTrapframe *utf)
 	// the disk.
 	//
 	// LAB 5: you code here:
-    
+
     addr = ROUNDDOWN(addr, PGSIZE);
     r = sys_page_alloc(0, addr, PTE_W | PTE_U | PTE_P);
     if (r != 0) panic("PANIC at bc_pgfault: %e", r);
     r = ide_read(blockno * BLKSECTS, addr, BLKSECTS);
     if (r != 0) panic("PANIC at bc_pgfault: %e", r);
-    
+
 
 	// Clear the dirty bit for the disk block page since we just read the
 	// block from disk
@@ -84,20 +84,20 @@ flush_block(void *addr)
 		panic("flush_block of bad va %08x", addr);
 
 	// LAB 5: Your code here.
-    
+
     if (!va_is_mapped(addr) || !va_is_dirty(addr)) return;
-    
+
     int r;
-    
+
     addr = ROUNDDOWN(addr, PGSIZE);
-    
+
     r = ide_write(blockno * BLKSECTS, addr, BLKSECTS);
     if (r != 0) panic("PANIC at flush_block, ide_write: %e", r);
-    
+
     r = sys_page_map(0, addr, 0, addr, uvpt[PGNUM(addr)] & PTE_SYSCALL);
     if (r != 0) panic("PANIC at flush_block, sys_page_map: %e", r);
-    
-    
+
+
 	//panic("flush_block not implemented");
 }
 
@@ -111,14 +111,14 @@ buffer_cache_eviction(void *addr)
         addr >= (void *)(DISKMAP + DISKSIZE)){
 		panic("challenge5 panic va %08x", addr);
 	}
-    
+
 	if(block_num <= 2 ||
         !va_is_mapped(addr)) return;
-	
+
 	if(uvpt[PGNUM(addr)] & PTE_D) flush_block(addr);
-	
+
 	addr = (void *)ROUNDDOWN(addr, PGSIZE);
-	r = sys_page_unmap(0, addr));
+	r = sys_page_unmap(0, addr);
 	if(r < 0) panic("challenge5 panic %e", r);
 }
 
@@ -177,4 +177,3 @@ bc_init(void)
 	// cache the super block by reading it once
 	memmove(&super, diskaddr(1), sizeof super);
 }
-

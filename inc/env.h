@@ -29,6 +29,12 @@ typedef int32_t envid_t;
 #define NENV			(1 << LOG2NENV)
 #define ENVX(envid)		((envid) & (NENV - 1))
 
+// CHALLENGE
+#define ENV_PRIORITY_MAX 0
+#define ENV_PRIORITY_HIGH 10
+#define ENV_PRIORITY_NORMAL 100
+#define ENV_PRIORITY_MIN 1000
+
 // Values of env_status in struct Env
 enum {
 	ENV_FREE = 0,
@@ -43,6 +49,8 @@ enum EnvType {
 	ENV_TYPE_USER = 0,
 };
 
+
+
 struct Env {
 	struct Trapframe env_tf;	// Saved registers
 	struct Env *env_link;		// Next free Env
@@ -51,9 +59,23 @@ struct Env {
 	enum EnvType env_type;		// Indicates special system environments
 	unsigned env_status;		// Status of the environment
 	uint32_t env_runs;		// Number of times environment has run
+	int env_cpunum;			// The CPU that the env is running on
 
 	// Address space
 	pde_t *env_pgdir;		// Kernel virtual address of page dir
+
+	// Exception handling
+	void *env_pgfault_upcall;	// Page fault upcall entry point
+
+	// Lab 4 IPC
+	bool env_ipc_recving;		// Env is blocked receiving
+	void *env_ipc_dstva;		// VA at which to map received page
+	uint32_t env_ipc_value;		// Data value sent to us
+	envid_t env_ipc_from;		// envid of the sender
+	int env_ipc_perm;		// Perm of page mapping received
+    
+    // CHALLENGE
+    int env_priority;
 };
 
 #endif // !JOS_INC_ENV_H

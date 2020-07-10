@@ -4,6 +4,7 @@
 #include <inc/memlayout.h>
 #include <inc/trap.h>
 
+#include <kern/picirq.h>
 
 
 ###################################################################
@@ -22,7 +23,6 @@
  */
  
  
- /*
 #define TRAPHANDLER(name, num)						\
 	.globl name;		\
 	.type name, @function;			\
@@ -30,14 +30,14 @@
 	name:					\
 	pushl $(num);							\
 	jmp _alltraps
-*/
+
 
 /* Use TRAPHANDLER_NOEC for traps where the CPU doesnt push an error code.
  * It pushes a 0 in place of the error code, so the trap frame has the same
  * format in either case.
  */
 
-/*
+
 #define TRAPHANDLER_NOEC(name, num)					\
 	.globl name;							\
 	.type name, @function;						\
@@ -48,7 +48,8 @@
 	jmp _alltraps
 
 .text
-*/
+
+/*
 
 // CHALLENGE : 
 
@@ -71,12 +72,13 @@
     .globl  handlers
 
 handlers:
+*/
 
 /*
  * Lab 3: Your code here for generating entry points for the different traps.
  */
 
-/*
+
 TRAPHANDLER_NOEC(handler_divide, T_DIVIDE) 
 TRAPHANDLER_NOEC(handler_debug, T_DEBUG)  
 TRAPHANDLER_NOEC(handler_nmi, T_NMI) 
@@ -97,7 +99,15 @@ TRAPHANDLER(handler_align, T_ALIGN)
 TRAPHANDLER_NOEC(handler_mchk, T_MCHK)
 TRAPHANDLER_NOEC(handler_simderr, T_SIMDERR)
 TRAPHANDLER_NOEC(handler_syscall, T_SYSCALL)
-*/
+
+TRAPHANDLER_NOEC(th_irq_timer, IRQ_OFFSET + IRQ_TIMER)
+TRAPHANDLER_NOEC(th_irq_kbd, IRQ_OFFSET + IRQ_KBD)
+TRAPHANDLER_NOEC(th_irq_serial, IRQ_OFFSET + IRQ_SERIAL)
+TRAPHANDLER_NOEC(th_irq_spurious, IRQ_OFFSET + IRQ_SPURIOUS)
+TRAPHANDLER_NOEC(th_irq_ide, IRQ_OFFSET + IRQ_IDE)
+TRAPHANDLER_NOEC(th_irq_error, IRQ_OFFSET + IRQ_ERROR)
+
+/*
 
     TRAPHANDLER(handler0, 0)
     TRAPHANDLER(handler1, 1)
@@ -148,6 +158,7 @@ TRAPHANDLER_NOEC(handler_syscall, T_SYSCALL)
     TRAPHANDLER(handler46, 46)
     TRAPHANDLER(handler47, 47)
     TRAPHANDLER(handler48, 48)
+*/
 
 /*
  * Lab 3: Your code here for _alltraps
@@ -167,7 +178,6 @@ TRAPHANDLER_NOEC(handler_syscall, T_SYSCALL)
     call trap;
 */
 
-
 _alltraps:
     pushl %ds
     pushl %es
@@ -177,4 +187,3 @@ _alltraps:
     movw %ax, %es
     pushl %esp
     call trap
-

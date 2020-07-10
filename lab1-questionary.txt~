@@ -1,0 +1,199 @@
+=== This template file contains questions you need to answer.
+=== Fill your answers on appropriate blank lines only.
+=== Don't start any line with three equal signs "===".
+=== Don't edit any lines starting from three equal signs.
+=== Use C notation to write numbers: 42 for decimal, 0x2a for hexadecimal.
+=== We may check most of the answers automatically, so "forty two" or
+=== "26+16" won't work for this example. Spaces are mostly ignored, so
+=== "  42  " is OK (without quotes of course). 
+=== When asked to specify address & instruction, do it in the form of
+=== gdb output "ADDRESS: INSTRUCTION", for example "0x7c26:  or  $0x1,%eax"
+=== Don't make lines longer than 80 characters. You don't need to fit your
+=== answer in a single line, you can start a new line at will.
+
+
+=== Q What is the number of the first port BIOS writes into?
+0x70
+
+=== Q What is the number of the first port BIOS reads from?
+0x71
+
+=== Q What device is probably accessed through above ports?
+The ports 0x70 and 0x71 are the CMOS registers and RTC.
+"CMOS" is a tiny bit of very low power static memory that lives on the same
+chip as the Real-Time Clock. CMOS can only be accessed through IO Ports
+0x70 and 0x71.
+
+=== Q What instruction causes processor to switch to 32-bit mode?
+===   (specify address & instruction)
+0x7c2d:	ljmp    $PROT_MODE_CSEG, $protcseg
+0x7c2d:	ljmp	$0xb866,$0x87c32
+(got through obj/boot/boot.asm)
+
+=== Q What's the instruction performed immediately after the processor
+===   is switched to 32-bit mode? (address & instruction)
+movw	$PROT_MODE_DSEG,%ax    # Our data segment selector
+0x7c32:	mov	$0x10,%ax
+(got through obj/boot/boot.asm)
+
+=== Q What is the last instruction of boot loader? (address & instruction)
+0x7d6b: call *0x10018
+
+=== Q What is first instruction of the kernel? (address & instruction)
+0x10000c:	movw	$0x1234,0x472
+
+=== Q Where boot loader finds information how many sectors it must
+===   read in order to fetch the entire kernel from disk
+===   (remove leading "====" from the correct answer line)
+==== hard coded in boot loader
+     elf header
+==== elf tail
+==== gnome header
+==== gnome tail
+==== none of above
+// load each program segment (ignores ph flags)
+	ph = (struct Proghdr *) ((uint8_t *) ELFHDR + ELFHDR->e_phoff);
+	eph = ph + ELFHDR->e_phnum;
+	for (; ph < eph; ph++)
+    7d5c:	83 c4 0c             	add    $0xc,%esp
+    7d5f:	eb e6                	jmp    7d47 <bootmain+0x3d>
+		// as the physical address)
+		readseg(ph->p_pa, ph->p_memsz, ph->p_offset)
+The bootloader reads the number of program headers, and load each of them.
+The bootloader knows how many sectors each of them has according to the ELF
+header, therefore knows how many sectors to read in total.
+It loads each one of them.
+
+=== Q Where boot loader finds information what address to start
+===   executing kernel from?
+===   (remove leading "====" from the correct answer line)
+==== hard coded in boot loader
+     elf header
+==== elf tail
+==== gnome header
+==== gnome tail
+==== none of above
+using:
+objdump -f obj/kern/kernel
+start address 0x0010000c
+This information located in e_entry, in the elf header
+
+=== Q What C function in boot loader contains the logic of reading the
+===   whole kernel? (not full function declaration, just the name)
+bootmain
+
+=== Q What are 4 words of memory at 0x100000 at the point the BIOS
+===   enters the boot loader?
+===   (as displayed by gdb, in the form WORD1 WORD2 WORD3 WORD4)
+0x00000000 0x00000000 0x00000000 0x00000000
+
+=== Q What are 4 words of memory at 0x100000 at the point the boot
+===   loader enters the kernel?
+===   (as displayed by gdb, in the form WORD1 WORD2 WORD3 WORD4)
+0x1badb002 0x00000000 0xe4524ffe 0x7205c766
+
+/entry:
+	movw	$0x1234,0x472			# warm boot
+f0100000:	02 b0 ad 1b 00 00    	add    0x1bad(%eax),%dh
+f0100006:	00 00                	add    %al,(%eax)
+f0100008:	fe 4f 52             	decb   0x52(%edi)
+f010000b:	e4 66                	in     $0x66,%al
+
+f010000c <entry>:
+f010000c:	66 c7 05 72 04 00 00 	movw   $0x1234,0x472
+(the first 4 words are until the middle of the last instruction we copied)
+
+=== Q What's the link address of .text section of the kernel?
+0xf0100000
+running objdump -h obj/kern/kernel:
+  0 .text         00001907  f0100000  00100000  00001000  2**4
+
+=== Q What's the entry point (start address) of the kernel?
+0x0010000c
+running objdump -f obj/kern/kernel
+
+=== Q What source file contains the first kernel instruction?
+===   (file name including extensions, but excluding the path)
+entry.S
+
+=== Q Study the file you've just found.
+===   What's the name of a kernel entry point as appears in this file?
+_start
+
+=== Q What line among all kernel sources declares the name you've just
+===   found as kernel entry point? (full line)
+# '_start' specifies the ELF entry point. 
+line 40 at entry.S
+_start=RELOC(entry)
+
+=== Q What's the first instruction which would "break" if you were to
+===   get the boot loader's link address wrong? "Break" here means: 
+===   the result of executing the instruction is different from the
+===   one before the change of the link address.
+===   Check yourself by recompiling & debugging!
+===   (address & instruction)
+0x7c00: ljmp $PROT_MODE_CSEG, $protcseg
+
+=== Q What's the first instruction after the kernel establishes a new
+===   mapping that would fail to work properly if the mappings were
+===   not in place? (address & instruction)
+The first instruction that would fail if we did not enable paging would be
+the instruction that does a jump to a high virtual address.  If paging is not enabled, this will cause an out of range error.
+0x10002d:	jmp	*%eax
+
+=== Q What functions from console.c are directly used by printf.c?
+===   (just function names separated by spaces, not full declarations)
+cputchar
+
+=== Q What is the task of console.c lines 194-202?
+===   (free form, up to 10 words)
+When the screen is full, it creates a new line.
+
+===   Consider the code
+===   	int x = 1, y = 3, z = 4;
+===	cprintf("x %d, y %x, z %d\n", x, y, z);
+===   executing inside cprintf function just after fmt and ap are
+===   initialized (just before the call to vcprintf).
+
+=== Q What's the contents of the first byte in memory pointed to by
+===   fmt? (write this byte as a number)
+"x" = 120 // the first char in the fmt string
+
+=== Q What's the contents of the first byte in memory pointed to by
+===   ap? (write this byte as a number)
+1 // the value of the first variable in the va
+
+===   Consider the code
+===     unsigned int i = 0x00646c72;
+===     cprintf("H%x Wo%s", 57616, &i);
+
+=== Q What is the output of the code?
+He110 World
+
+=== Q To lead to the same output in big-endian architecture, what
+===   should be the value of the second argument?
+0x00646c72 --> 0x726c6400
+
+=== Q To lead to the same output in big-endian architecture, what
+===   should be the value of i?
+57616
+The value of i should stay the same.
+because it is fetched as unsigned int, it doesn׳t need to be changed.
+
+=== Q What is printed after "y=" for cprintf("x=%d y=%d", 3)?
+===   (free form, up to 10 words)
+Content of the address after 3, it can be anything
+
+=== Q What instruction reserves space for kernel stack?
+===   (address & instruction)
+0xf0100034:	mov	$0xf0110000,%esp
+
+=== Q How many 32-bit words (i.e. bytes/4) does each recursive nesting
+===   level of test_backtrace adds to the stack size?
+8
+it pushes the registers #ebp, #esi, #ebx 
+it moves the sp 12 bytes lower
+it pushes #eax (==$esi-1)
+then it calls itself, then pushes eip implicitly.
+that means if we add everything together we will get 4+4+4+12+4+4=32Bytes which is
+8.

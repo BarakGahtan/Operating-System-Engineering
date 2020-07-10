@@ -1,0 +1,171 @@
+=== This template file contains questions you need to answer.
+=== Fill your answers on appropriate blank lines only.
+=== Don't start any line with three equal signs "===".
+=== Don't edit any lines starting from three equal signs.
+=== Use C notation to write numbers: 42 for decimal, 0x2a for hexadecimal.
+=== We may check most of the answers automatically, so "forty two" or
+=== "26+16" won't work for this example. Spaces are mostly ignored, so
+=== "  42  " is OK (without quotes of course). 
+=== When asked to specify address & instruction, do it in the form of
+=== gdb output "ADDRESS: INSTRUCTION", for example "0x7c26:  or  $0x1,%eax"
+=== Don't make lines longer than 80 characters. You don't need to fit your
+=== answer in a single line, you can start a new line at will.
+=== However, when asked to fill "a table" make each table raw a single line.
+
+
+=== Q What's the purpose of leaving virtual memory region
+===   0xeebfe000-0xeebff000 inaccessible?
+===   (free form, up to 10 words)
+This page left invalid to guard against exception stack overflow
+
+=== Q Define a page table entry with the following properties:
+===   frame starts at 0x1234000. It can be written by the kernel
+===   without causing any errors, but has never been written yet. On
+===   the other hand, application cannot write to the page, but has
+===   recently successfully read from it. All bits which are not
+===   responsible for above properties are set to zero.  
+===   (a single memory WORD as would be output by gdb's x/1x)
+0x01234025
+
+=== Q Consider JOS kernel code:
+===     mystery_t x;
+===   	char* value = return_a_pointer();
+===   	*value = 10;
+===   	x = (mystery_t) value;
+===   What type mystery_t should refer to?
+===   (remove leading "====" from the correct answer line)
+     uintptr_t
+==== physaddr_t
+
+
+=== Q What information is stored in page directory when mem_init()
+===   finishes? For each non-empty PD enntry specify:
+===    - decimal index (0-1023)
+===    - hexadecimal address of virtual memory mapped by this entry
+===    - name of kernel data structure which is intended to be
+===      accessible through this PDE (when appropriate, in quotes)
+===    - general name (free form, up to 10 words in quotes)
+===    Sort the table by the index in ascending order. If several
+===    consequent entries are only differ in address field, you can
+===    specify ellipses ("...") instead of an "inner" entries. Please
+===    align columns into readable table using spaces.
+===    Format example (all the values are made up; omit the header):
+===    INDEX ADDRESS DATA-STRUCTURE         NAME/DESCRIPTION
+===    24    0x12345 "struct Segdesc gdt[]" "Global descriptor table"
+===    ...
+===    42    0x98765 "struct Segdesc gdt[]" "Global descriptor table"
+===    50    0x00011 ""                     "boot loader code"
+0 0x00000000 "" ""
+1 0x00400000 "" ""
+2 0x00800000 "" ""
+...
+956 0xef000000 "User pages" ""
+957 0xef400000 "Current page table" "Current page table, kernel R-, user R-"
+958 0xef800000 ""   "(0xefbfe000 - 0xefc00000 Kernel stack)"
+959 0xefc00000 "Current page table" "Current page table, kernel RW"
+960 0xf0000000 "Page table" "Page table for bottom 4MB of phys memory"
+...
+1022 0xff80000 "Page table" "Page table for second to top 4MB of phys mem"
+1023 0xffc0000 "Page table" "Page table for top 4MB of phys memory"
+
+=== Q We have placed the kernel and user environment in the same
+===   address space. Why will user programs not be able to read or
+===   write the kernel's memory? What specific mechanisms protect the
+===   kernel memory?
+===   (free form, up to 15 words)
+VM is divided into ULIM and UTOP. Protected by permission bits, and CPL.
+
+=== Q Which virtual addresses are readable by the user?
+===   (in the form ADDR1-ADDR2, if none, specify NONE)
+0x00000000-0xef800000
+
+=== Q Which virtual addresses are writable by the user?
+===   (in the form ADDR1-ADDR2, if none, specify NONE)
+0x00000000-0xeec00000
+
+=== Q Assume a hacker can change N bits inside page table (on any
+===   level, PD or PT) after it has been set up by the kernel (and
+===   before full TLB flush). What is the minimal N to gain full
+===   control of the system from hacker's user space process?
+2
+
+=== Q What's the maximum amount of physical memory this kernel can
+===   support? (number of megabytes, without MB suffix)
+256
+
+=== Q What single constant can be changed in kernel source to make
+===   this limit 2 times lower (if kernel normally supports 10MB,
+===   we want to make it support only 5MB?
+KERNBASE
+
+=== Q What value should this constant be changed to?
+0xf8000000
+
+=== Q Assume the computer has the maximum amount of memory supported
+===   by the (unmodified) kernel. What's the overhead of managing this
+===   memory in terms of (physical) memory spent?
+===   Specify only data structures which size depends on the amount of
+===   physical memory and exclude the "fixed" overhead. For example,
+===   if data structure size is 123K+0.01*(memory size) and maximum 
+===   amount of memory is 100MB, specify 0.01*100MB = 1024KB.
+===   For each such data structure specify:
+===    - size in KB (without "KB suffix")
+===    - name of kernel data structure (when appropriate, in quotes)
+===    - general name (free form, up to 10 words in quotes)
+===    Sort the table by the size in ascending order. Please
+===    align columns into readable table using spaces.
+===    Format example (all the values are made up; omit the header):
+===    SIZE  DATA-STRUCTURE         NAME/DESCRIPTION
+===    42    "struct Segdesc gdt[]" "Global descriptor table"
+4       "page-directory"    "1024 entries, each of size 4B"
+4096    "page-table"        "1024 page tables, each has 1024 entries of size 4B"
+512     "PageInfo struct"   "information of Physical pages"
+
+
+====================================================================
+=== Q What challenge(s) have you chosen to implement? (specify
+===   challenge numbers separated by spaces, if more than one)
+2 4
+
+=== Q If the challenge requires changing the kernel source, list the
+===   files which you have changed/added during implementation.
+===   (one file per line, relative to lab directory containing .git/)
+kern/monitor.c
+kern/monitor.h
+kern/pmap.c
+
+=== Q Describe your solution.
+===   (free form, up to 500 words, don't need to use all 500!)
+
+challenge2:
+
+For challenge2, we created function for each tool.
+-mon_showmappings: using pdgir_walk, for each page_table_entry, we print it's
+address and its flags. In order to optimize the printing, we print it by shifting
+the bits and doing a bitwise AND operation with 1 for each flag. That would print
+the appropriate chars.
+The usage is:
+showmappings bound1 bound2
+-mon_chpgperm: using pgdir_walk, we find the pte for the given address. if the
+entry exists, we continue with the permission update. We first make sure the 
+arguments are correct, and matching the characters. According to the given
+parameters, we update the page table entry.
+Usage is:
+for a set operation - chpgperm action va state
+for a clear operation - chpgperm action va
+for a change operation -  chgperm action va state
+-mon_memdump: According to the given flag, if the address given is virtual then
+we use page_lookup for finding the matching PageInfo struct.
+If the address given is physical, then we use KADDR.
+using page_lookup, we search for the page contains the given
+address. if we find the page, we print it's address. else, we print that the
+given page is unmapped.
+
+challenge4:
+in order to flip the 4th bit in reg cr4, we did a bitwise or with the word 0x10 and the previous register's value.
+Therefore, page size is increased to 4 MB.
+We then loop through all the pages that make up the big page. This is a manual usage of
+boot_map_region.
+This challenge can be turned on \ off using the DEFINE in the beginning of the file -
+#DEFINE CHALLENGE_4. If CHALLENGE_4 defined, then new method is invoked, and page size will be
+increased.

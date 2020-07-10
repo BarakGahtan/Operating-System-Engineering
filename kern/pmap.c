@@ -655,6 +655,7 @@ page_remove(pde_t *pgdir, void *va)
     struct PageInfo *page = page_lookup(pgdir, va, &page_table_entry);
 
     // Physical page not exist, so do nothing
+    if (page == NULL) return; // CHANGE
     if (!page_table_entry|| !(*page_table_entry & PTE_P)) return;
 
     // Substract reference count

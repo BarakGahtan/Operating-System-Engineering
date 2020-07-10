@@ -21,8 +21,8 @@
  *   void NAME();
  * where NAME is the argument passed to TRAPHANDLER.
  */
- 
- 
+
+
 #define TRAPHANDLER(name, num)						\
 	.globl name;		\
 	.type name, @function;			\
@@ -51,7 +51,7 @@
 
 /*
 
-// CHALLENGE : 
+// CHALLENGE :
 
 #define TRAPHANDLER(name, num)						\
     .data;  \
@@ -79,22 +79,22 @@ handlers:
  */
 
 
-TRAPHANDLER_NOEC(handler_divide, T_DIVIDE) 
-TRAPHANDLER_NOEC(handler_debug, T_DEBUG)  
-TRAPHANDLER_NOEC(handler_nmi, T_NMI) 
-TRAPHANDLER_NOEC(handler_brkpt, T_BRKPT) 
-TRAPHANDLER_NOEC(handler_oflow, T_OFLOW) 
-TRAPHANDLER_NOEC(handler_bound, T_BOUND) 
-TRAPHANDLER_NOEC(handler_illop, T_ILLOP) 
+TRAPHANDLER_NOEC(handler_divide, T_DIVIDE)
+TRAPHANDLER_NOEC(handler_debug, T_DEBUG)
+TRAPHANDLER_NOEC(handler_nmi, T_NMI)
+TRAPHANDLER_NOEC(handler_brkpt, T_BRKPT)
+TRAPHANDLER_NOEC(handler_oflow, T_OFLOW)
+TRAPHANDLER_NOEC(handler_bound, T_BOUND)
+TRAPHANDLER_NOEC(handler_illop, T_ILLOP)
 TRAPHANDLER_NOEC(handler_device, T_DEVICE)
-TRAPHANDLER(handler_dblflt, T_DBLFLT) 
-TRAPHANDLER(handler_tss, T_TSS) 
-TRAPHANDLER(handler_segnp, T_SEGNP) 
-TRAPHANDLER(handler_stack, T_STACK) 
-TRAPHANDLER(handler_gpflt, T_GPFLT) 
-TRAPHANDLER(handler_pgflt, T_PGFLT) 
+TRAPHANDLER(handler_dblflt, T_DBLFLT)
+TRAPHANDLER(handler_tss, T_TSS)
+TRAPHANDLER(handler_segnp, T_SEGNP)
+TRAPHANDLER(handler_stack, T_STACK)
+TRAPHANDLER(handler_gpflt, T_GPFLT)
+TRAPHANDLER(handler_pgflt, T_PGFLT)
 
-TRAPHANDLER_NOEC(handler_fperr, T_FPERR) 
+TRAPHANDLER_NOEC(handler_fperr, T_FPERR)
 TRAPHANDLER(handler_align, T_ALIGN)
 TRAPHANDLER_NOEC(handler_mchk, T_MCHK)
 TRAPHANDLER_NOEC(handler_simderr, T_SIMDERR)
@@ -103,6 +103,7 @@ TRAPHANDLER_NOEC(handler_syscall, T_SYSCALL)
 TRAPHANDLER_NOEC(th_irq_timer, IRQ_OFFSET + IRQ_TIMER)
 TRAPHANDLER_NOEC(th_irq_kbd, IRQ_OFFSET + IRQ_KBD)
 TRAPHANDLER_NOEC(th_irq_serial, IRQ_OFFSET + IRQ_SERIAL)
+TRAPHANDLER_NOEC(th_irq_network, IRQ_OFFSET + IRQ_NETWORK)
 TRAPHANDLER_NOEC(th_irq_spurious, IRQ_OFFSET + IRQ_SPURIOUS)
 TRAPHANDLER_NOEC(th_irq_ide, IRQ_OFFSET + IRQ_IDE)
 TRAPHANDLER_NOEC(th_irq_error, IRQ_OFFSET + IRQ_ERROR)
@@ -163,7 +164,7 @@ TRAPHANDLER_NOEC(th_irq_error, IRQ_OFFSET + IRQ_ERROR)
 /*
  * Lab 3: Your code here for _alltraps
  */
- 
+
 /*
  _alltraps:
     pushl %ds;

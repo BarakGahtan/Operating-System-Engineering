@@ -11,6 +11,8 @@
 #include <kern/syscall.h>
 #include <kern/console.h>
 #include <kern/sched.h>
+#include <kern/time.h>
+#include <kern/e1000.h>
 
 // Print a string to the system console.
 // The string is exactly 'len' characters long.
@@ -22,7 +24,7 @@ sys_cputs(const char *s, size_t len)
 	// Destroy the environment if not.
 
 	// LAB 3: Your code here.
-    
+
     user_mem_assert(curenv, s, len, PTE_U);
 
 	// Print the string supplied by the user.
@@ -82,7 +84,7 @@ sys_exofork(void)
 	// will appear to return 0.
 
 	// LAB 4: Your code here.
-    
+
     struct Env *new_env;
     int res;
 
@@ -93,7 +95,7 @@ sys_exofork(void)
     new_env->env_tf = curenv->env_tf;
     new_env->env_tf.tf_regs.reg_eax = 0;  // return 0 to child
     return new_env->env_id;
-    
+
 	//panic("sys_exofork not implemented");
 }
 
@@ -118,7 +120,7 @@ sys_env_set_status(envid_t envid, int status)
     int res;
     if (status != ENV_RUNNABLE && status != ENV_NOT_RUNNABLE) {
         return -E_INVAL;
-    } 
+    }
     if ((res = envid2env(envid, &env, 1)) != 0) {
         return res;
     }
@@ -142,12 +144,12 @@ sys_env_set_trapframe(envid_t envid, struct Trapframe *tf)
 	// address!
     int r;
     struct Env* e;
-    
+
     if ((r = envid2env(envid, &e, 1)) != 0) {
         return r;
     }
     user_mem_assert(e, tf, sizeof(struct Trapframe), PTE_W);
-    
+
     /*
     tf->tf_ss |= 3;
     tf->tf_cs |= 3;
@@ -159,9 +161,9 @@ sys_env_set_trapframe(envid_t envid, struct Trapframe *tf)
 	e->env_tf.tf_eip |= 3;
 	e->env_tf.tf_eflags |= FL_IF;
 	e->env_tf = *tf;
-    
+
     return 0;
-    
+
 	//panic("sys_env_set_trapframe not implemented");
 }
 
@@ -194,11 +196,11 @@ sys_env_set_priority(envid_t envid, int priority)
 {
         int ret;
         struct Env *env;
-        
+
         ret = envid2env(envid, &env, 1);
 
         if (ret < 0) return ret;
-        
+
         env->env_priority = priority;
         return 0;
 }
@@ -283,7 +285,7 @@ sys_page_map(envid_t srcenvid, void *srcva,
 	//   check the current permissions on the page.
 
 	// LAB 4: Your code here.
-    
+
     struct Env *env_src, *env_dst;
     struct PageInfo *page_info;
     pte_t *page_table_entry;
@@ -314,8 +316,8 @@ sys_page_map(envid_t srcenvid, void *srcva,
         return res;
     }
     return 0;
-    
-    
+
+
 	//panic("sys_page_map not implemented");
 }
 
@@ -388,7 +390,7 @@ static int
 sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 {
 	// LAB 4: Your code here.
-    
+
     struct Env *env;
     struct PageInfo *page_info;
     pte_t *page_table_entry;
@@ -401,7 +403,7 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
     if (env->env_ipc_recving == 0) {
         return -E_IPC_NOT_RECV;
     }
-    
+
     if ((uint32_t)srcva < UTOP) {
         if (PGOFF(srcva) != 0 || (perm & (PTE_U | PTE_P)) != (PTE_U | PTE_P) || (perm & ~(PTE_SYSCALL)) != 0) {
             return -E_INVAL;
@@ -424,9 +426,9 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
     env->env_ipc_from = curenv->env_id;
     env->env_ipc_value = value;
     env->env_status = ENV_RUNNABLE;
-    
+
     return 0;
-    
+
 	//panic("sys_ipc_try_send not implemented");
 }
 
@@ -445,17 +447,109 @@ static int
 sys_ipc_recv(void *dstva)
 {
 	// LAB 4: Your code here.
-	
+
     if ((uint32_t)dstva < UTOP && PGOFF(dstva) != 0) {
         return -E_INVAL;
     }
     curenv->env_ipc_dstva = dstva;
-    
+
     curenv->env_status = ENV_NOT_RUNNABLE;
     curenv->env_ipc_recving = 1;
-    
+
     //panic("sys_ipc_recv not implemented");
 	return 0;
+}
+
+static int
+sys_time_msec(void)
+{
+    return time_msec();
+}
+
+static int
+sys_transmit_packet(uint8_t *buf, size_t len)
+{
+	user_mem_assert(curenv, buf, len, 0);
+
+  int res = e1000_transmit(buf, len);
+
+  return res;
+}
+
+static int
+sys_receive_packet(uint8_t *buf, size_t len, size_t *len_store)
+{
+	ssize_t r;
+
+	user_mem_assert(curenv, buf, len, PTE_W);
+
+	if (len_store != NULL) {
+		user_mem_assert(curenv, buf, sizeof(size_t), PTE_W);
+	}
+
+	r = e1000_receive(buf, len);
+	if (r < 0) {
+		return r;
+	}
+
+	if (len_store != NULL) {
+		*len_store = r;
+	}
+	return 0;
+}
+
+/* CHANGE */
+static int
+sys_rec_zZ(envid_t env) {
+
+  struct Env* env_rec;
+  int res;
+
+	res = envid2env(env, &env_rec, 0);
+	if (res < 0){
+		return res;
+	}
+
+  // update fields to match a sleeping env
+	env_rec->rec_zZ = true;
+	env_rec->env_status = ENV_NOT_RUNNABLE;
+
+  sched_yield();
+}
+
+static int
+sys_send_zZ(envid_t env) {
+
+  struct Env* env_send;
+  int res;
+
+	res = envid2env(env, &env_send, 0);
+	if (res < 0){
+		return res;
+	}
+
+  // update fields to match a sleeping env
+	env_send->send_zZ = true;
+	env_send->env_status = ENV_NOT_RUNNABLE;
+
+  sched_yield();
+}
+
+static int
+sys_get_hwaddr(uint8_t *mac_data)
+{
+    user_mem_assert(curenv, mac_data, E1000_MAC_BYTES, PTE_W);
+    int i;
+    for (i= 0; i < E1000_MAC_BYTES; i++) {
+        mac_data[i] = ((uint8_t *) e1000_mac)[i];
+    }
+    return 0;
+}
+
+static int
+sys_e1000_transmit_direct(void *packet, size_t len)
+{
+	return e1000_transmit_direct(packet, len);
 }
 
 // Dispatches to the correct kernel function, passing the arguments.
@@ -465,8 +559,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 	// Call the function corresponding to the 'syscallno' parameter.
 	// Return any appropriate return value.
 	// LAB 3: Your code here.
-    
-    
+
+
 	// panic("syscall not implemented");
 
 	switch (syscallno) {
@@ -500,9 +594,26 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
             return sys_ipc_try_send(a1, a2, (void *)a3, a4);
         case SYS_env_set_trapframe:
             return sys_env_set_trapframe(a1, (struct Trapframe *)a2);
+        case SYS_time_msec:
+          return sys_time_msec();
+        case SYS_transmit_packet:
+        	return sys_transmit_packet((uint8_t *) a1, (size_t) a2);
+        case SYS_receive_packet:
+          return sys_receive_packet((uint8_t *) a1, (size_t) a2, (size_t *) a3);
+        /* CHANGE */
+        case SYS_send_zZ:
+          return sys_send_zZ(a1);
+        case SYS_rec_zZ:
+          return sys_rec_zZ(a1);
+
+        // CHALLENGE 1 LAB 6
+        case SYS_get_hwaddr:
+          return sys_get_hwaddr((void *)a1);
+
+  	    case SYS_e1000_transmit_direct:
+  		    user_mem_assert(curenv, (void *) a1, (size_t) a2, PTE_W);
+  		    return sys_e1000_transmit_direct((void *) a1, (size_t) a2);
         default:
             return -E_INVAL;
 	}
 }
-
-
